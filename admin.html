@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Банк вопросов — админ</title>
+<style>
+  :root {
+    --bg:#f4f6fa; --card:#fff; --text:#1d2433; --muted:#6b7385;
+    --accent:#1f5fbf; --accent-soft:#e6eefb; --ok:#1e8e4e; --ok-soft:#e3f5ea; --border:#dde2ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#12151c; --card:#1b2029; --text:#e8ebf2; --muted:#9aa3b5;
+      --accent:#5b93e8; --accent-soft:#1f2b40; --ok:#4cc27f; --ok-soft:#173225; --border:#2c3340;
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.45; }
+  .wrap { max-width:820px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.3rem; margin:8px 0 4px; }
+  .sub { color:var(--muted); font-size:.88rem; margin-bottom:14px; }
+  .stats { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:8px 12px;
+    font-size:.88rem; cursor:pointer; }
+  .stat b { color:var(--accent); }
+  .stat.active { border-color:var(--accent); background:var(--accent-soft); }
+  .tools { display:flex; gap:8px; margin-bottom:14px; }
+  input[type=search] { flex:1; min-width:0; font:inherit; padding:10px 12px; border-radius:10px;
+    border:1.5px solid var(--border); background:var(--card); color:var(--text); }
+  .btn { font:inherit; font-weight:600; border:none; border-radius:10px; padding:10px 14px;
+    cursor:pointer; background:var(--accent); color:#fff; white-space:nowrap; }
+  .topic-h { font-size:.85rem; text-transform:uppercase; letter-spacing:.04em; color:var(--accent);
+    font-weight:700; margin:18px 0 8px; }
+  .q { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px;
+    margin-bottom:10px; break-inside:avoid; }
+  .q-head { display:flex; gap:10px; }
+  .num { color:var(--muted); font-weight:700; min-width:2.2em; }
+  .q-text { font-weight:600; }
+  ol.opts { margin:10px 0 0; padding-left:3.4em; }
+  ol.opts li { margin:3px 0; padding:2px 6px; border-radius:6px; }
+  ol.opts li.right { background:var(--ok-soft); color:var(--ok); font-weight:600; }
+  ol.opts li.right::after { content:"  ✓ правильный"; font-size:.8rem; }
+  .answer { margin:10px 0 0 3.2em; font-size:.93rem; padding:8px 12px; border-left:4px solid var(--ok);
+    background:var(--ok-soft); border-radius:6px; }
+  .answer span { color:var(--muted); font-size:.8rem; display:block; }
+  .empty { color:var(--muted); text-align:center; padding:24px 0; }
+  @media print {
+    :root { --bg:#fff; --card:#fff; --text:#000; --muted:#555; --accent:#000; --ok:#000; --ok-soft:#eee; --border:#bbb; }
+    .tools, .stats, .noprint { display:none !important; }
+    .wrap { max-width:none; padding:0; }
+    .q { border:none; border-bottom:1px solid #bbb; border-radius:0; padding:8px 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Банк вопросов — проверка</h1>
+  <div class="sub">Всего вопросов: <b id="total"></b>. Правильные ответы выделены зелёным.</div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="tools">
+    <input type="search" id="search" placeholder="Поиск по вопросам и ответам…">
+    <button class="btn" onclick="window.print()">Печать / PDF</button>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<script src="questions.js"></script>
+<script>
+const Q = window.QUESTIONS || [];
+const $ = id => document.getElementById(id);
+let topicFilter = null;
+
+function renderStats() {
+  const counts = {};
+  Q.forEach(q => counts[q.topic] = (counts[q.topic] || 0) + 1);
+  const box = $("stats"); box.innerHTML = "";
+  const mk = (label, n, t) => {
+    const d = document.createElement("div");
+    d.className = "stat" + (topicFilter === t ? " active" : "");
+    d.innerHTML = "<span></span>: <b></b>";
+    d.children[0].textContent = label; d.children[1].textContent = n;
+    d.onclick = () => { topicFilter = t; renderStats(); renderList(); };
+    box.appendChild(d);
+  };
+  mk("Все темы", Q.length, null);
+  Object.keys(counts).forEach(t => mk(t, counts[t], t));
+}
+
+function renderList() {
+  const term = $("search").value.trim().toLowerCase();
+  const box = $("list"); box.innerHTML = "";
+  let last = null, shown = 0;
+  Q.forEach((q, i) => {
+    if (topicFilter && q.topic !== topicFilter) return;
+    const hay = [q.q, q.a, q.explain, ...(q.options || [])].join(" ").toLowerCase();
+    if (term && !hay.includes(term)) return;
+    shown++;
+    if (q.topic !== last) {
+      const h = document.createElement("div"); h.className = "topic-h"; h.textContent = q.topic;
+      box.appendChild(h); last = q.topic;
+    }
+    const d = document.createElement("div"); d.className = "q";
+    const head = document.createElement("div"); head.className = "q-head";
+    const num = document.createElement("span"); num.className = "num"; num.textContent = "№" + (i + 1);
+    const txt = document.createElement("span"); txt.className = "q-text"; txt.textContent = q.q;
+    head.append(num, txt); d.appendChild(head);
+    if (q.options && q.options.length) {
+      const ol = document.createElement("ol"); ol.className = "opts"; ol.type = "A";
+      q.options.forEach((o, j) => {
+        const li = document.createElement("li"); li.textContent = o;
+        if (j === q.correct) li.className = "right";
+        ol.appendChild(li);
+      });
+      d.appendChild(ol);
+    }
+    if (q.a || q.explain) {
+      const a = document.createElement("div"); a.className = "answer";
+      a.innerHTML = "<span>Ответ / пояснение</span>";
+      a.appendChild(document.createTextNode(q.a || q.explain));
+      d.appendChild(a);
+    }
+    box.appendChild(d);
+  });
+  if (!shown) box.innerHTML = "<div class='empty'>Ничего не найдено</div>";
+}
+
+$("total").textContent = Q.length;
+$("search").oninput = renderList;
+renderStats(); renderList();
+</script>
+</body>
+</html>
